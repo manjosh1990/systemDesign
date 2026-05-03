@@ -1,0 +1,2575 @@
+https://cloud.cdp.rpsconsulting.in/console/
+
+26SHA0150_U07
+siLv3rfoX%45% -cloud
+
+
+15blacK#321# - windows
+
+rps@123 - ubuntu
+
+commands:
+
+$ sudo apt-get install docker.io -y
+
+$ sudo systemctl status docker
+
+$ sudo usermod -aG docker ubuntu
+
+
+
+##Create docker image in interactive mode
+
+1. remove all containers
+	
+	$ docker container ls -aq|xargs docker container rm -f
+
+	$ docker container run --name test -it ubuntu:16.04
+
+	$ apt-get update
+
+	$ apt-get install curl git apache2 -y
+
+	$ echo "welcome to the world of docker and kubernetes" </var/www/html/index.html
+
+	$ cd /var/www/html/
+
+	$ apachectl -D foreground
+
+	press ctrl+pq
+
+2. check the ip of the container
+	
+	$ docker container inspect test
+
+	$ curl -v http://container_ip:80
+
+	you will see the webpage
+
+
+3. stop container
+	
+	$ docker container stop test
+
+4. commit the container to docker image repo (local)
+	
+	$ docker container commit test web:httpdv1
+
+	list the new image
+
+	$ docker image ls
+
+	run the new image
+
+	$ docker container run --name webserver1 -d -P web:httpdv1
+
+	list the running container
+	$ docker container ls
+
+	you will see no container is in running state
+
+	$ docker container ls -a
+
+	you can see container webserver1 is stopped, the container is stopped due wrong command, the command should be (apachectl -D foreground) instead it is /bin/bash
+
+	recreate the image with changes
+
+	$ docker container commit --change='CMD ["apachectl","-DFOREGROUND"]' -c "EXPOSE 80" test web:httpdv2
+
+	check image using
+
+	$ docker image ls
+
+	Run the container using the command
+
+	$ docker container run --name webhttp -d -P web:httpdv2
+
+	browse the webpage using the public ip and port, check host port using
+
+	$ docker container ls
+
+	## pushing images to docker hub
+
+	pushing image with name web:httpdv2 
+
+	login to docker hub first
+
+	$ docker login docker.io -u <username>
+	$ docker image push web:httpdv2
+
+	you will get permission denied message
+
+	create a new image from exiting image using
+
+	$ docker image tag web:httpdv2 docker.io/<dockerid>/web:httpdv2
+
+	$ docker image push docker.io/<dockerid>/web:httpdv2
+
+	delete the existing image and container and run the container from newly pushed image
+
+	$ docker container ls -aq|xargs docker container rm -f
+
+	$ docker image rm web:httpdv1
+	$ docker image rm web:httpdv2
+	$ docker image rm manjosh1990/web:httpdv2
+
+	run docker image from hub
+	$ docker container run --name webserver -d -P dockerid/web:httpdv2
+
+
+==========================
+day 3
+
+network and port mapping
+
+$ docker contain run -d -P docker.io/library/nginix:latest
+
+$ docker network ls
+
+$ docker network inspect bridge
+
+$ docker container inspect <container_name>
+
+
+
+
+
+
+
+
+
+Pod basic commands
+
+To list pod in default namespaces
+
+$ kubectl get pod
+
+To list the pod running in all namespaces
+
+$ kubectl get pod --all-namespaces
+
+to create the pod
+
+
+eg
+
+$ kubectl run testpod --image=nginx --port=80
+
+To check the pod status
+
+$ kubectl get pod
+
+To dispay detailed information about pod and events
+
+$ kubectl describe pod testpod
+
+To list the nodes where the pod is running and pod ip details
+
+$ kubectl get pod -o wide
+
+To login to the pod containers
+
+$ kubectl exec -it testpod sh
+
+to display the pod information in yaml or json format
+
+$ kubectl get pod testpod -o yaml
+
+$ kubectl get pod testpod -o json
+
+To delete the pod
+
+$ kubectl delete pod testpod 
+
+
+
+Create POD using Yaml file
+
+Generate the Yaml file using the kubectl command with dry-run option
+
+
+
+ kubectl run demopod --image=nginx --dry-run=client -o yaml
+
+save the output of the above command to a file
+
+kubectl run demopod --image=nginx --dry-run=client -o yaml > demopod.yaml
+
+Create the pod using yaml file
+
+$ kubectl apply -f demopod.yaml
+
+to list the pod 
+
+$ kubectl get pod
+
+to delete the pod 
+
+$ kubectl delete -f demopod.yaml
+
+Pod labels
+
+Pod labels are key value pair that we assigned to pod and provide meningful information to pod . POD labels are mandatory and ned to assigned to pod by the user
+
+To cretae the pod with user defined label
+$ kubectl run newpod --image=nginx -l app=nginx
+
+to list the pod labels
+
+$ kubectl get pod --show-labels
+
+create the pod using yaml file with labels
+
+modify the demopod.yaml
+
+$ cat >demopod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: tomee
+    env: dev
+    version: v1
+  name: demopod
+spec:
+  containers:
+  - image: nginx
+    name: demopod
+press ctrl-d
+
+$ cat demopod.yaml
+
+$ kubectl apply -f demopod.yaml
+
+check the pod labels using the command
+$ kubectl get pod --show-labels
+
+create a new pod and defined the label in command line 
+
+$ kubectl run appserver --image=tomee -l app=tomee --port=8080
+
+to add more labels to pod using the command line
+
+$ kubectl label pod appserver env=dev version=1
+
+To list the pod matching specific labels
+
+$  kubectl get pod -l app=tomee
+
+to overwrite  existing pod label
+$ kubectl label pod appserver app=web --overwrite
+
+to add new pod label
+
+kubectl label pod demopod role=webserver
+
+to delete the pod label
+
+ kubectl label pod demopod role-
+
+to list all the pod labels
+
+$ kubectl get pod --show-labelscvfg	
+
+to delete all the pods
+
+$ kubectl delete pod --all
+-----------------------------------------
+
+
+day 5
+
+lKubernetes Lab Namespace
+ 
+ Namespace
+
+History
+ kubectl api-resources|more
+   98  kubectl explain namespaces
+   99  kubectl api-resources|more
+  100  kubectl explain namespaces
+  101  kubectl explain namespaces.apiVersion
+  102  kubectl explain namespaces.metadata
+  103  kubectl explain namespaces.spec
+  104  kubectl explain namespaces --recursive
+  105  kubectl create ns test
+  106  kubectl get ns
+  107  kubectl describe ns test
+  108  kubectl get ns test -o yaml
+  109  kubectl get ns test -o json
+  110  kubectl delete ns test
+  111  kubectl create ns prod --dry-run=client -o yaml
+  112  kubectl create ns prod --dry-run=client -o yaml > prodns.yaml
+  113  kubectl get ns
+  114  kubectl apply -f prodns.yaml
+  115 kubectl get ns
+  116  kubectl delete -f prodns.yaml
+  117  kubectl get ns
+
+
+Lab
+To list all namespace
+
+$ kubectl get ns
+
+To display detailed information about namespace
+
+$ kubectl describe ns ns_name
+
+eg
+
+$ kubectl describe ns kube-system
+
+To create namespace
+
+ $kubectl create ns test
+
+$ kubectl create ns prod
+
+to list newly created namespace
+
+$ kubectl get ns
+
+To delete namespace
+
+$ kubectl delete ns test
+
+Create namespace uing yaml file
+
+$ kubectl create ns instavote --dry-run=client -o yaml    * it will print the yaml file as the putput)
+
+Save the yaml file
+
+ kubectl create ns instavote --dry-run=client -o yaml >instavotens.yaml
+
+Create the namespace
+
+$ kubectl apply -f instavotens.yaml
+
+ $kubectl run testpod --image=docker.io/library/nginx --port=80 -n instavote
+  $ kubectl get pod -n instavote
+  $  kubectl describe pod testpod -n instavote
+  $ kubectl exec -it testpod -n instavote -- bash
+  $  kubectl logs testpod -n instavote
+ $  kubectl delete pod testpod -n instavote
+
+to delete the namespace using yaml file
+
+$ kubectl delete -f instavote.yaml
+
+POD with volumes
+cat > pod-with-emptydir.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+  labels:
+    tier: front
+    app: nginx
+    role: ui
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - name: data
+          mountPath: /var/www/html-sample-app
+  volumes:
+    - name: data
+      emptyDir: {}
+ 
+ctrl-d to save
+ 
+create the pod using the command
+$kubectl apply -f pod-with-emptydir.yaml
+
+Check the pod status
+
+$kubectl exec -it web -- sh
+
+$cd /var/www/html-sample-app
+
+create some files
+
+$touch aa bb cc dd ee ff gg hh
+
+exit from the pod using the command
+
+$exit
+
+ 
+check the pod on which worker nod it is running
+ 
+$kubectl get pod -o wide
+
+check the pod uuid using the command
+
+$kubectl get pod web -o yaml 
+
+copy the uid of the pod
+ 
+login to the node on which the pod is running
+
+$kubectl get pod -o wide
+
+Login to the node and execute the following command
+
+execute 
+
+$ sudo ls -l /var/lib/kubelet/pods/pod-uuid/volumes/kubernetes.io~empty-dir/data
+
+replace pod-uid with th uid you have copied in previous step
+
+you will able to see the data
+
+e
+
+ 
+
+ execute the command to delete the pod 
+delete the pod
+$kubectl delete pod web
+ 
+Login to the node
+
+$ sudo ls -l /var/lib/kubelet/pods/pod-uuid/volumes/kubernetes.io~empty-dir/data
+ you will find the the pah gets deleted
+the volume type emptydir is not persistent and it get delete onc the pod is deleted
+
+OSTPATH volume type
+ 
+create the pod-with-volumes-hostpath.yamll file wiyh HOSTPATH volume type
+cat > pod-with-volumes-hostpath.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+  labels:
+    tier: front
+    app: nginx
+    role: ui
+spec:
+  containers:
+    - name: nginx
+      image: nginx:stable-alpine
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - name: data
+          mountPath: /var/www/html-sample-app
+  volumes:
+    - name: data
+      hostPath:
+        path: /mnt/data
+        type: DirectoryOrCreate
+pres ctrld to save
+ 
+create the pod 
+ 
+$kubectl apply -f pod-with-volumes-hostpath.yaml
+ 
+login to the pod
+$kubectl exec -it web -- sh
+$cd /var/www/html-sample-app
+create some files
+$touch a b c d e f g
+ 
+exit from the pod type
+ 
+$exit
+ 
+check on which worker node pod is running
+kubectl get pod -o wide
+ 
+login to the node and execute the steps
+
+execute
+$ls -l /mnt/data
+ 
+you will able to find the data which you have created from the pod. the /mnt/data is the hostpath directory which is created by the volume section defined in the pod yaml file. the /mnt/data directory is mapped to the pod /var/www/html-sample-app
+
+
+
+delete the pod
+ 
+$kubectl delete pod web
+
+Login to the node where the pod is running
+
+
+$ ls /mnt/data
+
+you will able to see the data 
+
+Dynamic Storage Provisioning :
+==========================================================
+List the storage class configured
+
+$ kubectl get sc
+
+We will first use the disk storage class which is named as standard. This is the default storage class
+
+cat > mongodb-pvc.yaml
+ apiVersion: v1
+ kind: PersistentVolumeClaim
+ metadata:
+   name: mongodb-pvc
+ spec:
+   storageClassName: local-path
+   accessModes:
+     - ReadWriteOnce
+   resources:
+     requests:
+       storage: 2Gi
+       
+press ctrl-d to save
+
+Create the PVC using the yaml file
+$ kubectl apply -f mongodb-pvc.yaml
+
+$ kubectl get pv
+
+You will see the PV will be in pending  state  
+
+$ kubectl get pvc
+
+the pvc will be in pending state . The PV will be created when the pod claming the PVC will be created 
+
+now create the pod and use the pvc in the pod spec
+
+cat > mongodb-pod.yaml
+ apiVersion: v1
+ kind: Pod
+ metadata:
+   name: mongodb 
+ spec:
+   containers:
+   - image: mongo
+     name: mongodb
+     volumeMounts:
+     - name: mongodb-data
+       mountPath: /data/db
+     ports:
+     - containerPort: 27017
+       protocol: TCP
+   volumes:
+   - name: mongodb-data
+     persistentVolumeClaim:
+       claimName: mongodb-pvc
+       
+press ctrl-d to save
+
+Apply the pod yaml file
+
+$ kubectl apply -f mongodb-pod.yaml
+
+now check the pvc status and you will see the pv has created and boubd to pvc
+
+$ kubectl get pvc
+
+$ kubectl get pv
+
+Login to the pod and create some files
+
+$ kubectl exec -it mongodb -- bash
+$ df -h 
+
+$ cd /data/db
+create some file in the directory
+
+$ touch aa bb cc dd ee ff gg
+
+exit from the pod
+
+$ exit
+
+delete the pod and deleteing the pod will not delete the pv and pvc
+
+$ kubectl delete pod mongodb
+
+$ kubectl get pvc
+$ kubectl get pv
+
+You can recreate the pod and login to the pod again to verify that the data exists.
+
+$ kubectl apply -f mongodb-pod.yaml
+
+$ kubectl exec -it mongodb -- bash
+
+c
+
+exit from the pod
+$ exit
+
+The PV has the reclaim policy of delete which means that deleting the pvc will also delete the pv
+
+$ kubectl delete pod mongodb
+
+$ kubectl delete pvc mongodb-pvc
+
+check the pvc and pv status
+
+$ kubectl get pvc
+
+$ kubectl get pv
+
+
+
+Login to the pod and create some files
+
+$ kubectl exec -it mongodb -- bash
+$ df -h 
+
+$ cd /data/db
+create some file in the directory
+
+$ touch aa bb cc dd ee ff gg
+
+exit from the pod
+
+$ exit
+
+delete the pod and deleteing the pod will not delete the pv and pvc
+
+$ kubectl delete pod mongodb
+
+$ kubectl get pvc
+$ kubectl get pv
+
+You can recreate the pod and login to the pod again to verify that the data exists.
+
+$ kubectl apply -f mongodb-pod.yaml
+
+$ kubectl exec -it mongodb -- bash
+
+c
+
+exit from the pod
+$ exit
+
+The PV has the reclaim policy of delete which means that deleting the pvc will also delete the pv
+
+$ kubectl delete pod mongodb
+
+$ kubectl delete pvc mongodb-pvc
+
+check the pvc and pv status
+
+$ kubectl get pvc
+
+$ kubectl get pv
+
+Pod resource 
+Pod Resource snd health check
+
+$ cat > pod_resource.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+ name: frontend
+spec:
+ containers:
+ - name: app
+   image: nginx
+   resources:
+     requests:
+       memory: "64Mi"
+       cpu: "250m"
+     limits:
+       memory: "128Mi"
+       cpu: "500m"
+press ctrl-d to save  
+
+# kubectl apply -f pod_resource.yaml
+
+$ kubectl get pod
+
+you will see the pod are running
+
+$ kubectl describe pod frontend
+
+you will see the request and limit defined in the pod
+
+to see the resource allocation of the worker node where the pod is running
+
+$ kubectl describe node worker_node_name
+
+delete the pod
+
+$ kubectl delete -f pod_resource.yaml
+
+modify the yaml file
+$ cat > pod-resource.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+ name: frontend1
+spec:
+ containers:
+ - name: app
+   image: nginx
+   resources:
+     requests:
+       memory: "64Mi"
+       cpu: "500m"
+     limits:
+       memory: "124Mi"
+       cpu: "900m"
+
+press ctrl-d to save
+
+$ kubectl apply -f pod_resource.yaml
+
+$ kubectl get pod
+
+you will see the pod is in pending state
+
+$ kubectl describe pod frontend
+
+you will able to find the reason for the pod in pending state
+
+Delete the pod 
+
+$ kubectl delete pod frontend
+
+LimitRange
+Creating the Limit Range resource
+cat > cpu-constraints.yaml
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-resource-constraint
+spec:
+  limits:
+  - default: # this section defines default limits
+      cpu: 500m
+    defaultRequest: # this section defines default requests
+      cpu: 500m
+    max: # max and min define the limit range
+      cpu: "1"
+    min:
+      cpu: 100m
+    type: Container
+
+kubectl apply -f cpu-constraints.yaml
+kubectl describe ns default
+you will see the limit range resource and the min max and default cpu request and limit field
+create a pod without any request and limit defined
+kubectl run testpod —image=nginx
+kubectl describe pod testpod
+you will see the default request and limit assigned to he pod by the limit range resource
+modify the pod_resource.yaml and change the cpu request field to 100m and save the file and execute
+kubectl apply -f pod_resource.yaml
+the pod will not run because the cpu request field value is less than the min cpu defined in the limit range
+change the value of cpu request in the pod_resource yaml and make it 200m and change the limit to 900m
+apply the yaml file and again you will see the error message as the limit field is more than what is specified in the limit range resouce.
+modify the yaml file and put the cpu request as 200m and limit as 700m and then run the pod
+delete the limit range resource
+
+$ kubectl delete -f cpu-constraints.yaml
+
+
+
+=============================Pod health check===========================
+
+Pod health check
+
+cat > pod_liveness.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+ labels:
+   test: liveness
+ name: liveness-exec
+spec:
+ containers:
+ - name: liveness
+   image: k8s.gcr.io/busybox
+   args:
+   - /bin/sh
+   - -c
+   - touch /tmp/healthy; sleep 30; rm -rf /tmp/healthy; sleep 600
+   livenessProbe:
+     exec:
+       command:
+       - cat
+       - /tmp/healthy
+     initialDelaySeconds: 5
+     periodSeconds: 5
+
+
+
+ctrl+d to save
+
+
+kubectl apply -f pod_liveness.yaml
+
+after 30 seconds the pod will restart as health check will fail
+
+check continuously the output of
+
+kubectl describe pod liveness-exec
+
+create the following yaml file
+
+cat > pod-health-full.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+ name: kuard
+ labels:
+  app: kuard
+spec:
+ volumes:
+   - name: "kuard-data"
+     emptyDir: {}
+ containers:
+   - image: gcr.io/kuar-demo/kuard-amd64:1
+     name: kuard
+     ports:
+       - containerPort: 8080
+         name: http
+         protocol: TCP
+     resources:
+       requests:
+         cpu: "500m"
+         memory: "128Mi"
+       limits:
+         cpu: "1000m"
+         memory: "256Mi"
+     volumeMounts:
+       - mountPath: "/data"
+         name: "kuard-data"
+     livenessProbe:
+       httpGet:
+         path: /healthy
+         port: 8080
+       initialDelaySeconds: 5
+       timeoutSeconds: 1
+       periodSeconds: 10
+       failureThreshold: 3
+     readinessProbe:
+       httpGet:
+         path: /ready
+         port: 8080
+       initialDelaySeconds: 30
+       timeoutSeconds: 1
+       periodSeconds: 10
+       failureThreshold: 3
+
+kubectl apply -f pod-health-full.yaml
+
+check the pod status
+
+kubectl get pod
+
+describe the pod status
+kubectl describe pod kuard
+
+to verify that the health is done
+kubectl logs kuard
+delete the pod
+kubectl delete pod kuard
+
+Edit the yaml file and changfe the readinessprobe path to readz from ready
+
+save the file and create the pod again
+
+$ kuberl apply -f pod-health.yaml
+
+check the pod status in the desceribe output
+
+$ kubectl describe pod kuard 
+
+you will see after 30 sec the readinees probe failes
+
+you can verify that pod i snot ready using the command
+$ kubectl get pod
+
+you will see0/1 in the ready column 
+
+Configmap and secret
+https://github.com/dgkanatsios/CKAD-exercises/blob/main/d.configuration.md
+Confimap and Secrets
+
+clone the repo 
+$git clone https://github.com/nigelpoulton/TheK8sBook.git
+$cd TheK8sBook/
+$cd configmaps
+check all the yaml files
+ $ls
+ Create the configmap using the following file
+
+$cat multimap.yaml  
+
+read the yamk file and see ahat data will be stored in configmap
+ $kubectl apply -f multimap.yml 
+
+ to get the confimap
+ $kubectl get cm
+  $kubectl describe cm multimap
+ $kubectl get cm multimap -o yaml
+ 
+Ctreate the pod which will be using the configmap .
+ $cat cmpod.yml 
+
+ create the pod using the 
+ $kubectl apply -f cmpod.yml 
+ check the pod status 
+ $kubectl get pod
+
+ login to the pod 
+ $kubectl exec -it cmvol -- sh
+
+  $cd /etc/name
+  check the files using the 
+
+  $ls 
+
+  cat both the files and you will get the same content that is stored in confimap(the data from the configmalo is injected as a file in the montpath /etc/name
+ come out of the pod using the exit command
+
+  $ exit
+
+Injecting as a environment variable 
+deploy the pod envpod.yaml
+ $cat envpod.yml 
+ $kubectl apply -f envpod.yml 
+$kubectl get pod
+$ kubectl exec -it envpod -- sh
+
+execute the env command to see all the environment variable 
+
+$env
+
+
+you will find the envionment variables defined in the yaml and the value is inected from the cinfigmap
+
+$exit
+
+ Creating secretes
+ $cat tkb-secret.yml 
+to decode the base64 decoding
+$echo "bmlnZWxwb3VsdG9u"| base64 --decode
+$kubectl apply -f tkb-secret.yml 
+ 
+Creating the pod that will use the secret
+$cat secretpod.yml 
+$kubectl apply -f secretpod.yml 
+$kubectl get pod
+$kubectl exec -it secret-pod -- sh
+
+$cd /etc/tkb
+$ls
+
+you will see two files username and password 
+
+$cat password
+$cat username
+
+you will see the data in text that is injected by the secret in the coontainer
+
+exit from the pod
+
+
+--------------------------------------------
+Multi contianer pod 
+
+delete all the pod running in your cluster
+
+kubectl delete pod --all
+
+
+$ cat > multi-container-pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+  labels:
+    tier: front
+    app: nginx
+    role: ui
+spec:
+  containers:
+    - name: nginx
+      image: nginx:stable-alpine
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - name: data
+          mountPath: /var/www/html-sample-app
+ 
+    - name: sync 
+      image: schoolofdevops/sync:v2
+      volumeMounts:
+        - name: data
+          mountPath: /var/www/app
+ 
+  volumes:
+    - name: data
+      emptyDir: {}
+
+
+Cretae the pod 
+
+$ kubectl apply -f multi-container-pod.yaml
+
+check the pod status
+
+$ kubectl get pod
+
+
+To verify that the container of the same pod share network and volume 
+
+login to first container
+
+kubectl exec -it web sh -c nginx
+
+execute the following command
+hostname
+ip a
+
+cat /etc/issue
+
+cd /var/www/html-sample-app
+
+create some empty files
+$ touch a b c d e f
+
+exit
+
+Login to second container of the pod web
+
+$ kubectl exec -it web sh -c sync
+
+execute the following command
+hostnae
+ip a
+
+cat /etc/issue
+
+cd /var/www/app
+ls
+you will able to see the same files whihc you created by login to nginx container
+
+To check the container logs
+
+kubectl logs web -c nginx
+
+kubectl logs web -c sync
+
+Delete the multi-container pod
+kubectl delete -f multi-container-pod.yaml
+
+
+
+Installing Multi-node-cluster
+$ sudo apt-get update
+$ sudo apt-get install docker.io -y
+# For AMD64 / x86_64
+[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
+
+$ chmod +x ./kind
+$ sudo mv ./kind /usr/local/bin/kind
+create a config file
+cat > cluster-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# One control plane node and three "workers".
+#
+# While these will not add more real compute capacity and
+# have limited isolation, this can be useful for testing
+# rolling updates etc.
+#
+# The API-server and other control plane components will be
+# on the control-plane node.
+#
+# You probably don't need this unless you are testing Kubernetes itself.
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+- role: worker
+- role: worker
+press ctrl-d tosave
+
+Create the cluster 
+$ kind create cluster --name my-cluster --config config.yaml
+
+Installing kubectl 
+$  curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+verify the node status
+$ kubectl get node
+
+
+
+Replicaset lab
+
+ReplicaSet
+
+
+delete all the pod
+$ kubectl delete pod --all
+
+cat >vote-rs.yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: vote
+spec:
+  replicas: 8
+  minReadySeconds: 20
+  selector:
+    matchLabels:
+      role: vote
+    matchExpressions:
+      - {key: version, operator: In, values: [v1, v2, v3]}
+  template:
+    metadata:
+      name: vote
+      labels:
+        app: python
+        role: vote
+        version: v2
+    spec:
+      containers:
+        - name: app
+          image: schoolofdevops/vote:v2
+          ports:
+            - containerPort: 80
+              protocol: TCP
+ctrl+d to save
+
+create the repicaset
+
+$ kubectl apply -f vote-rs.yaml
+
+To list the replicaset
+$ kubectl get rs
+to list the pods
+$ kubectl get pod
+to display detailed information about pod
+$ kubectl describe rs vote
+
+Test the pod HA by deleting one pod
+
+$ kubectl get pod
+copy one of the pod name
+$ kubectl delete pod podname
+eg
+$ kubectl delete pod vote-5shbs
+ you will see a new pod immidiately created
+
+Creare the normal pod using the folliwng yaml file
+cat > newpod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vote
+  labels:
+    app: python
+    role: vote
+    version: v1
+spec:
+  containers:
+    - name: app
+      image: schoolofdevops/vote:v2
+      ports:
+        - containerPort: 80
+          protocol: TCP
+ctrl+d
+$ kubectl apply -f newpod.yaml
+
+$ kubectl get pod
+
+you will see the new pod is terminating . the reason of terminating of the new pod that the new pod is having the same label what is there in the selector of the rs
+
+Changed the desired state of replicaset by editing the file vote-rs.yaml and modify the replicas from 5 to 8
+and then
+$ vi vote-rs.yaml
+chnage replca count to 8
+
+$ kubectl apply -f vote-rs.yaml
+
+Modify the replica count using command
+
+$ kubectl scale rs vote --replicas=6
+
+Updating the application image in Replicaset
+
+modify the vote-rs.yaml file and update the pod label to v3 and the image version to v3
+
+vi vote-rs.yaml  
+
+the file content should be like this 
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: vote
+spec:
+  replicas: 6
+  minReadySeconds: 20
+  selector:
+    matchLabels:
+      role: vote
+    matchExpressions:
+      - {key: version, operator: In, values: [v1, v2, v3]}
+  template:
+    metadata:
+      name: vote
+      labels:
+        app: python
+        role: vote
+        version: v3
+    spec:
+      containers:
+        - name: app
+          image: schoolofdevops/vote:v3
+          ports:
+            - containerPort: 80
+              protocol: TCP
+
+kubectl apply -f vote-rs.yaml
+
+To verify the change 
+$ kubectl describe rs vote 
+
+you will see the label and umage get updated and now lets verify the pod
+
+$ kubectl get pod
+
+copy any one of the pod name and execute
+
+$ kubectl describe pod pod_name
+
+you will find the pod desription container the old label and old image. 
+Delete the pod and check the newly crated pod
+
+$ kubectl describe pod podname
+
+you will see the new pod is updated with the new label and docker image.
+
+Delete the rest of the pod and verify all the pod using th above command.
+
+Replicaset do not have the functionality of performing auto upgrade of the application. After modifying the image user need to manually delete the pod and then new pod created with the new version
+
+
+Replicaset lab
+
+ReplicaSet
+
+
+delete all the pod
+$ kubectl delete pod --all
+
+cat >vote-rs.yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: vote
+spec:
+  replicas: 8
+  minReadySeconds: 20
+  selector:
+    matchLabels:
+      role: vote
+    matchExpressions:
+      - {key: version, operator: In, values: [v1, v2, v3]}
+  template:
+    metadata:
+      name: vote
+      labels:
+        app: python
+        role: vote
+        version: v2
+    spec:
+      containers:
+        - name: app
+          image: schoolofdevops/vote:v2
+          ports:
+            - containerPort: 80
+              protocol: TCP
+ctrl+d to save
+
+create the repicaset
+
+$ kubectl apply -f vote-rs.yaml
+
+To list the replicaset
+$ kubectl get rs
+to list the pods
+$ kubectl get pod
+to display detailed information about pod
+$ kubectl describe rs vote
+
+Test the pod HA by deleting one pod
+
+$ kubectl get pod
+copy one of the pod name
+$ kubectl delete pod podname
+eg
+$ kubectl delete pod vote-5shbs
+ you will see a new pod immidiately created
+
+Creare the normal pod using the folliwng yaml file
+cat > newpod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vote
+  labels:
+    app: python
+    role: vote
+    version: v1
+spec:
+  containers:
+    - name: app
+      image: schoolofdevops/vote:v2
+      ports:
+        - containerPort: 80
+          protocol: TCP
+ctrl+d
+$ kubectl apply -f newpod.yaml
+
+$ kubectl get pod
+
+you will see the new pod is terminating . the reason of terminating of the new pod that the new pod is having the same label what is there in the selector of the rs
+
+Changed the desired state of replicaset by editing the file vote-rs.yaml and modify the replicas from 5 to 8
+and then
+$ vi vote-rs.yaml
+chnage replca count to 8
+
+$ kubectl apply -f vote-rs.yaml
+
+Modify the replica count using command
+
+$ kubectl scale rs vote --replicas=6
+
+Updating the application image in Replicaset
+
+modify the vote-rs.yaml file and update the pod label to v3 and the image version to v3
+
+vi vote-rs.yaml  
+
+the file content should be like this 
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: vote
+spec:
+  replicas: 6
+  minReadySeconds: 20
+  selector:
+    matchLabels:
+      role: vote
+    matchExpressions:
+      - {key: version, operator: In, values: [v1, v2, v3]}
+  template:
+    metadata:
+      name: vote
+      labels:
+        app: python
+        role: vote
+        version: v3
+    spec:
+      containers:
+        - name: app
+          image: schoolofdevops/vote:v3
+          ports:
+            - containerPort: 80
+              protocol: TCP
+
+kubectl apply -f vote-rs.yaml
+
+To verify the change 
+$ kubectl describe rs vote 
+
+you will see the label and umage get updated and now lets verify the pod
+
+$ kubectl get pod
+
+copy any one of the pod name and execute
+
+$ kubectl describe pod pod_name
+
+you will find the pod desription container the old label and old image. 
+Delete the pod and check the newly crated pod
+
+$ kubectl describe pod podname
+
+you will see the new pod is updated with the new label and docker image.
+
+Delete the rest of the pod and verify all the pod using th above command.
+
+Replicaset do not have the functionality of performing auto upgrade of the application. After modifying the image user need to manually delete the pod and then new pod created with the new version
+
+Delete all replicaset, pod and service
+
+$ kubectl delete rs vote
+
+
+Create the Deployment
+
+$ cat > vote-deploy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: vote
+spec:
+ strategy:
+   type: RollingUpdate
+   rollingUpdate:
+     maxSurge: 2
+     maxUnavailable: 0
+ revisionHistoryLimit: 4
+ paused: false
+ replicas: 8
+ minReadySeconds: 20
+ selector:
+   matchLabels:
+     role: vote
+   matchExpressions:
+     - {key: version, operator: In, values: [v1, v2, v3]}
+ template:
+   metadata:
+     name: vote
+     labels:
+       app: python
+       role: vote
+       version: v2
+   spec:
+     containers:
+       - name: app
+         image: schoolofdevops/vote:v2
+         ports:
+           - containerPort: 80
+             protocol: TCP
+press ctrl+d
+
+Create the deployment using the following command
+$ kubectl apply -f vote-deploy.yaml
+
+
+to list the deployment,rs and pod
+
+$ kubectl get deployment,rs,pod
+
+$ kubectl get deployment
+$ kubectl get rs
+$ kubectl get pod
+
+Scaling the deployment
+Modify the vote-deploy.yaml file and change the replica count to 4 . you can als use command line to scale the replicas
+apply the yaml file
+$ vi vote-deploy.yaml
+change the replica count to 4
+$ kubectl apply -f vote-deploy.yaml
+verify using
+
+$ kubectl get deployment
+$ kubectl get pod
+
+Performing rolling update
+
+modify the vote-depoy.yaml file and change the pod label to v3 and image to v4
+labels:
+       app: python
+       role: vote
+       version: v3
+   spec:
+     containers:
+       - name: app
+         image: schoolofdevops/vote:v4
+         ports:
+           - containerPort: 80
+             protocol: TCP
+
+Apply the yaml file
+
+$ kubectl apply -f vote-deploy.yaml
+
+To verify that the upgrade started
+
+$ kubectl rollout status deployment vote
+
+browse the application in the browser and refresh the page 2 or 2 times you will see old verion and new version of the application
+
+$ kubectl get pod
+
+$ kubectl describe pod podnamec
+
+verify the image name in the describe output and pod label
+
+To rollback to the previous version if not satisfied with the update
+
+$ kubectl rollout history deployment vote
+
+it will diplay different revision of the update history
+
+To check the changes in each version please use the command
+$ kubectl rollout history deployment vote --revision=1
+
+To rollback to the previous version (version=1)
+
+$ kubectl rollout undo deployment vote --to-revision=1
+
+to verify the update
+
+$ kubectl rollout status deployment vote
+
+to check the rollout history
+
+$ kubectl rollout history deployment vote
+
+to delete the deployment
+
+$ kubectl delete deployment vote
+
+or
+$ kubectl delete -f vote-deploy.yaml
+ kubectl annotate deployment vote "kubernetes.io/change-cause=image version is vote:v2"
+
+
+ service 
+
+$ kubectl delete rs vote
+
+cat > webrs.yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+ name: web
+spec:
+ replicas: 1
+ minReadySeconds: 20
+ selector:
+   matchLabels:
+     role: web
+     app: nginx
+ template:
+   metadata:
+     name: web
+     labels:
+       app: nginx
+       role: web
+       version: v3
+   spec:
+     containers:
+       - command:
+         - sleep
+         - "120000"
+         name: web
+         image: docker.io/library/ubuntu:latest
+         imagePullPolicy: IfNotPresent
+         ports:
+           - containerPort: 80
+             protocol: TCP
+ctrld d to save
+
+cat > vote-rs.yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+ name: vote
+spec:
+ replicas: 1
+ minReadySeconds: 20
+ selector:
+   matchLabels:
+     role: vote
+   matchExpressions:
+     - {key: version, operator: In, values: [v1, v2, v3]}
+ template:
+   metadata:
+     name: vote
+     labels:
+       app: python
+       role: vote
+       version: v3
+   spec:
+     containers:
+       - name: app
+         image: schoolofdevops/vote:v3
+         imagePullPolicy: IfNotPresent
+         ports:
+           - containerPort: 80
+             protocol: TCP
+ctrld-d to save
+
+create the replicasets
+kubectl apply -f webrs.yaml
+kubectl apply -f vote-rs.yaml
+
+check the status of the replicaset and the pod
+kubectl get rs
+
+kubectl get pod
+
+create the service for vote replicaset ( web wants to communicate with vote)
+kubectl expose rs vote --name votesvc --selector role=vote --port=80
+
+check the service status
+kubectl get svc
+
+check the pod ip address and the service endpoints
+
+kubectl get pod -o wide
+
+kubectl describe svc votesvc
+
+check the endpoint entry in the output the endpoint entry matches with the pod ip of vote.  check the selector field in the describe output with the help of selector the service is selecting the endpoints (pod to which forward the request)
+service is a internal load balancer, web pod uses the svc name votesvc to connect to vote pod, the service name votesvc will be resolved to the service ip and the service will forward the request to the endpoints.
+
+login to the web pod. Identify the pod name of web using the
+kubectl get pod
+
+kubectl exec -it web-pod-name -- bash
+
+inside the pod execute the command
+curl  -v http://votesvc:80
+
+you will able to see the web page.
+
+to futher understand how the service name resolves
+
+install a package in the pod container
+apt-get update
+apt-get install dnsutils -y
+
+nslookup votesvc
+
+you will see the fully qualified name of the service
+
+cat /etc/resolv.conf
+
+you will find the ip address of the dns server
+
+to find more about dns server
+
+type
+exit
+
+come out of the container
+
+Increase the replica count from 1 to 4
+kubectl scale rs vote --replicas=4
+
+check the pod
+
+kubectl get pod -o wide
+
+check the service votesvc and you will find 4 endpoints in the service
+kubectl describe svc votesvc
+
+login to the web pod. identify the name of the pod using the kubectl get pod command
+kubectl exec -it web-xxx bash
+
+curl -v http://votesvc:80
+
+repeat the command multiple times and you will see the service is load balancing the request to the pod replicas
+
+exit from the pod using the command
+exit
+
+communication between different namespace
+
+delete the vote-rs and votesvc service
+
+kubectl delete rs vote
+kubectl delete svc votesvc
+
+create a new namespace
+kubectl create ns ecom
+create the replicaset and the service in the namespace ecom
+$ kubectl apply -f vote-rs.yaml -n ecom
+
+create the service in ecom namespace
+
+$ kubectl expose rs vote --name votesvc --selector role=vote --port=80 -n ecom
+
+check the service and the pod
+$ kubectl get pod,svc -n ecom
+
+login to the pod web .check the name of the web pod using the kubectl get pod command
+$ kubectl exec -it web-c6zzk bash
+
+execute
+
+$ curl -v http://votesvc:80
+
+you will see the error host name not resolved
+
+check the hostname resolution using the nslookup command
+
+$ nslookup votesvc
+
+the nslookup command also shows error and not able to resolve the service name
+
+try the command
+
+$ nslookup votesvc.ecom
+
+you will see the service name resolved successfully
+
+test the application using
+
+exi
+
+user need to use the servicename.namespace as the connection name for communicating with other pod.
+
+same namespace only use servicename and between namespace servicename.namespace
+
+#################### END OF LAB ################################################
+
+Deploymant Lab
+
+Create the Deployment
+
+$ cat > vote-deploy.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: vote
+spec:
+ strategy:
+   type: RollingUpdate
+   rollingUpdate:
+     maxSurge: 2
+     maxUnavailable: 0
+ revisionHistoryLimit: 4
+ paused: false
+ replicas: 4
+ minReadySeconds: 20
+ selector:
+   matchLabels:
+     role: vote
+   matchExpressions:
+     - {key: version, operator: In, values: [v1, v2, v3]}
+ template:
+   metadata:
+     name: vote
+     labels:
+       app: python
+       role: vote
+       version: v2
+   spec:
+     containers:
+       - name: app
+         image: schoolofdevops/vote:v2
+         imagePullPolicy: IfNotPresent
+         ports:
+           - containerPort: 80
+             protocol: TCP
+press ctrl+d
+
+Create the deployment using the following command
+$ kubectl apply -f vote-deploy.yaml
+
+Create the service for the depoyment
+cat > vote-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+ name: vote
+ labels:
+   role: vote
+spec:
+ selector:
+   role: vote
+ ports:
+   - port: 80
+     targetPort: 80
+     nodePort: 30000
+ type: NodePort
+presse ctrl+d
+
+Create the service
+
+$ kubectl apply -f vote-svc.yaml
+
+to list the deployment,rs and pod
+
+$ kubectl get deployment,rs,pod
+
+$ kubectl get deployment
+$ kubectl get rs
+$ kubectl get pod
+
+To list te service
+$ kubectl get svc
+
+To get the node ip
+
+$ kubectl get node -o wide
+
+you can take the ip on any node and login to the VM and open mozilla browser 
+
+verify the node port and access the application using the http://nodeip:30000 in your browser
+
+you can also do 
+
+$ curl http://node-ip:nodeport from the cli
+
+Service Type LoadBalancer
+
+
+Delete the servcie vote
+
+$ kubectl delete svc vote
+
+Create the deployment
+
+$ kubectl apply -f vote-deploy.yaml
+
+Install the metallb loadbalcner
+
+$ kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.7/config/manifests/metallb-native.yaml
+
+Check your node ip range
+
+$ kubectl get node -o wide
+
+Create the metallb-config file and define the ippool use for the LB ip
+
+$ cat >metallb-config.yaml
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 172.18.0.200-172.18.0.240
+---
+
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
+
+  
+press ctrl-d tosave
+Apply the yaml file
+
+$ kubectl apply -f metallb-config.yaml
+
+Check the status of metallb controller 
+
+$ kubectl get pod -n metallb-system
+
+Create the service 
+
+$ kubectl expose deployment vote --type=LoadBalancer --selector role=vote --port=80
+
+Check the service status 
+
+$ kubectl get svc
+
+you will get the LB ip in the externalip column
+
+Take the ip and go to your ubuntu VM and put the ip in our browser and you will be able to access the application
+
+
+--------------------------------------------
+
+Statefulsets
+
+Statefulsets
+
+create the following yaml file for statefulsets
+
+first check the nfs storage is availabe or not
+
+$ kubectl get sc
+
+you will see the standard  storage class 
+
+Create the statefulset yaml
+$ cat > webstatefulset.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels: 
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    name: web
+  clusterIP: None
+  selector:
+    app: nginx
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels:
+      app: nginx # has to match .spec.template.metadata.labels
+  serviceName: "nginx"
+  replicas: 3 # by default is 1
+  template:
+    metadata:
+      labels:
+        app: nginx # has to match .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:latest
+      ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - name: www
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "local-path"
+      resources:
+        requests:
+          storage: 1Gi
+
+$ kubectl apply -f webstatefulset.yaml
+
+$ kubectl get pod
+
+$ kubectl delete pod web-0
+
+you will see the pod will create with same name 
+
+$ kubectl exec -it web-0 sh
+$ apt-get update
+$ apt-get install dnsutils iputils-ping -y
+$ nslookup nginx
+
+to check the service connectivity create a new pod
+
+
+$ kubectl run testpodsa --image=nginx --port=80
+create the service
+
+
+$ kubectl expose pod testpodsa --port=80
+
+ login to the testpodsa pod
+$ kubectl exec -it testpodsa -- sh
+$ apt-get update
+$ apt-get install dnsutils iputils-ping -y
+$ nslookup nginx
+$ ping nginx 
+ ctrl-c to stop and again ping
+$ ping nginx
+observe the output
+#exit 
+exit from the pod
+login to the web-0 pod
+$ kubectl exec -it web-0 sh
+$ curl -v http://testpodsa
+
+you will see the nginx web page
+
+web-0 can also communicate to other pod using the service name
+
+delete the statefulset
+$ kubectl delete -f webstatefulset.yaml
+
+Job and Cronjob
+https://github.com/dgkanatsios/CKAD-exercises/blob/main/c.pod_design.md#jobs
+https://github.com/jamesbuckett/ckad-questions/blob/main/02-ckad-env-configuration-
+
+Metrics-server
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    k8s-app: metrics-server
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+  name: system:aggregated-metrics-reader
+rules:
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: system:metrics-server
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes/metrics
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: system:metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:metrics-server
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+spec:
+  ports:
+  - appProtocol: https
+    name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+  selector:
+    k8s-app: metrics-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        k8s-app: metrics-server
+    spec:
+      containers:
+      - args:
+        - --cert-dir=/tmp
+        - --secure-port=10250
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        - --metric-resolution=15s
+        - --kubelet-insecure-tls
+        image: registry.k8s.io/metrics-server/metrics-server:v0.8.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /livez
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
+        name: metrics-server
+        ports:
+        - containerPort: 10250
+          name: https
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-dir
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      serviceAccountName: metrics-server
+      volumes:
+      - emptyDir: {}
+        name: tmp-dir
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: v1beta1.metrics.k8s.io
+spec:
+  group: metrics.k8s.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: metrics-server
+    namespace: kube-system
+  version: v1beta1
+  versionPriority: 100
+
+press ctrl-d to save
+$ kubectl apply -f metrics-server.yaml
+$ kubectl top node
+$ kubectl top pod
+
+Then follow the instruction in the following uRL
+https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale-walkthrough/
+
+
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  ports:
+  - port: 80
+    name: web
+  clusterIP: None
+  selector:
+    app: nginx
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  selector:
+    matchLabels:
+      app: nginx # has to match .spec.template.metadata.labels
+  serviceName: "nginx"
+  replicas: 3 # by default is 1
+  template:
+    metadata:
+      labels:
+        app: nginx # has to match .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:latest
+        ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - name: www
+          mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "standard"
+      resources:
+        requests:
+          storage: 1Gi
+          
+          
+od Scheduling Lab
+Pod Scheduling
+
+$ kubectl get node
+$ kubectl get node --show-labels
+cat >demopod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+ labels:
+   app: tomee
+   env: dev
+   version: v1
+ name: demopod
+spec:
+ containers:
+ - image: nginx
+   name: demopod
+ nodeName: my-cluster-worker4
+
+create the pod using
+$ kubectl apply -f demopod.yaml
+
+$ kubectl get pod -o wide
+you will see that the pod is running on master node because we have use nodeName and specify the name of the master node on which the pod will run. schduler is not coming in scope when you specify nodename.
+
+
+check the node taint of the master node
+$ kubectl describe node my-cluster-control-plane
+remove the taint
+$ kubectl taint node my-cluster-control-plane node-role.kubernetes.io/control-plane-
+
+check the taint status
+$ kubectl describe node my-cluster-control-plane
+
+
+$ kubectl delete -f demopod.yaml
+$ kubectl get node
+
+Define the label to both the node
+$ kubectl label node my-cluster-worker cpu=gpu
+$ kubectl label node my-cluster-worker2 cpu=gpu
+$ kubectl label node my-cluster-worker3 disk=ssd
+$ kubectl label node my-cluster-worker disk=ssd
+
+$kubectl get node --show-labels
+cat > demopod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+ labels:
+   app: tomee
+   env: dev
+   version: v1
+ name: demopod
+spec:
+ containers:
+ - image: nginx
+   name: demopod
+ nodeSelector:
+   cpu: gpu
+$kubectl apply -f demopod.yaml
+$ kubectl get pod -o wide
+now the pod will run on worker1 as we are using the nodeSelctor and the label. the pod will run on the node which matches the node label
+
+Node Maintenance
+$ kubectl get node
+
+
+the command will bring the node to maintainence and disable the scheduling
+$ kubectl drain my-cluster-control-plane --force --ignore-daemonsets
+$ kubectl get node -o wide
+$ kubectl get pod -o wide
+$ kubectl get node
+$ kubectl create deployment  testsched --image=nginx --replicas=4
+$ kubectl get pod -o wide
+$ kubectl get node
+
+Remove the node out of maintainence
+$ kubectl uncordon k8worker1
+$ kubectl get node
+$ kubectl create deployment  testsched2 --image=nginx --replicas=4
+
+
+
+
+$ kubectl get pod -o wide
+$ kubectl delete deployment testsched testsched2
+          
+Defining RBAC Policies
+To understand how to define RBAC Policies, in this lab, you are going to work with the API Tester app, and the add relevant policies to it.
+
+To begin with, clone API Tester app and launch it
+
+git clone https://github.com/schoolofdevops/k8s-api-tester.git
+cd k8s-api-tester
+
+kubectl apply -f api-tester-deploy.yaml
+Now list the pod and check the logs
+
+
+kubectl get pods
+
+kubectl logs -f api-tester-xxxx
+You shall see error messages with access to all api resources e.g. pods, deployments, services, pvs, events denied.
+
+Lets look at how to configure the RBAC policies to get this app to work.
+
+Adding Roles and ClusterRoles
+Add the following permissions for api-tester app
+
+It should be able to list pods, deplyoments and services in namespace default
+File api-tester-sa.yaml
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-tester
+  namespace: default
+File : api-tester-role.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: api-tester
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps", "extensions"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch"]
+File : api-tester-rolebinding.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-tester
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: api-tester
+  namespace: default
+roleRef:
+  kind: Role
+  name: api-tester
+  apiGroup: rbac.authorization.k8s.io
+apply
+
+kubectl apply -f api-tester-sa.yaml -f api-tester-role.yaml -f api-tester-rolebinding.yaml
+Now update the deployment spec to refer to Service Account as:
+
+File : api-tester-deploy.yaml
+
+...
+..
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-tester
+  template:
+    metadata:
+      labels:
+        app: api-tester
+    spec:
+      serviceAccountName: api-tester
+      containers:
+      - name: api-tester
+        image: docker.io/schoolofdevops/api-tester:latest
+
+..
+...
+apply
+
+kubectl apply -f api-tester-deploy.yaml
+validate
+
+
+kubectl get pods
+
+kubectl logs -f api-tester-xxxx
+at this time it should show you that it has the permissions to list pods, deployments and services in a namespace.
+
+Adding CLusterRoles and ClusterRoleBindings
+Add the following permissions for api-tester app
+
+It should be able to list persistentvolumeclaims in all namespaces
+It should have ability to create and delete persistentvolumes in all namespaces
+File: api-tester-clusterrole.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: api-tester-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["persistentvolumes"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+File: api-tester-clusterrolebinding.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: api-tester-cluster-role-binding
+subjects:
+- kind: ServiceAccount
+  name: api-tester
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: api-tester-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+apply
+
+kubectl apply -f api-tester-clusterrole.yaml  -f api-tester-clusterrolebinding.yaml
+validate
+
+kubectl get pods
+
+kubectl logs -f api-tester-xxxx
+At this time the logs for the api tester app should show you that it has the authorization to work with PVs and PVCs as well.          
+          
+      
+  
+  
+Monitoring setup with HELM
+In this lab, you are going to install and configure helm, and in turns, use it to configure a monitoring system for kubernetes using prometheus and grafana stack.
+
+Installing Helm (version 3)
+To install helm version 3 on Linux or MacOS, you can follow following instructions.
+
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+
+You could further refer to Official HELM Install Instructions for alternative options.
+
+Verify the installtion is successful,
+
+helm --help
+helm version
+Deploy Prometheus Stack with HELM
+Read about kube-prometheus-stack 33.1.0 · prometheus/prometheus-community chart at artifacthub.io
+
+Add helm repository using ,
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+Download the chart as,
+
+cd ~
+helm fetch --untar prometheus-community/kube-prometheus-stack
+
+Change into the charts directory
+
+cd kube-prometheus-stack/
+ls
+Deploy prometheus stack as,
+
+kubectl create ns monitoring
+helm install prom -n monitoring prometheus-community/kube-prometheus-stack
+
+Validate
+
+helm list -A
+
+kubectl get all -n monitoring
+kubectl get pods,svc -n monitoring
+Customising Prometheus Configurations
+To update the Grafana service to use NodePort configurations, upgrade the helm release by setting up customized properties as,
+
+helm upgrade prom -n monitoring prometheus-community/kube-prometheus-stack \
+  --set grafana.service.type=NodePort \
+  --set grafana.service.nodePort=30200
+Validate
+
+helm list -A
+
+kubectl get svc -n monitoring
+You should see new revision of monitoring stack deployed, and Grafana service changed to NodePort.
+
+Note down the node port and access Grafana with
+
+http://IPADDRESS:30200
+
+remember to replace node name/ip address and node port as actual.
+
+Login using
+
+User : admin
+Pass: prom-operator
+Once logged in, you should be able to browse and view Grafana dashboards from Dashboards menu.
+
+An example dashboard is as follows, 
+
+You could further explore various Grafana dashboards and configurations.
+
+Uninstalling the App with HELM
+Once you are done experiementing and learning, you could uninstall the application stack that you earlier installed with helm easily.
+
+To uninstall prometheus and grafana stack, begin by listing it
+
+helm list -A
+helm uninstall -n monitoring prom
+This should clean up everything that was deployed with helm earlier.
+
+Summary
+In this lab, we not only learnt about HELM, a kubernetes package manager, but also have setup a sophisticated health monitoring system with prometheus and grafana.
