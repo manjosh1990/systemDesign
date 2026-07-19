@@ -1,4 +1,4 @@
-package systemdesign.meetingscheduler.model;
+package meetingscheduler.model;
 
 public class Room {
     private final int id;

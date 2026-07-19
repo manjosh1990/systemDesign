@@ -1,7 +1,8 @@
-package systemdesign.meetingscheduler.service;
+package meetingscheduler.service;
 
-import systemdesign.meetingscheduler.model.Meeting;
-import systemdesign.meetingscheduler.model.User;
+
+import meetingscheduler.model.Meeting;
+import meetingscheduler.model.User;
 
 public class EmailNotificationService implements NotificationService {
 

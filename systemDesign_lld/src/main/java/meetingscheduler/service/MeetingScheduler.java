@@ -1,9 +1,9 @@
-package systemdesign.meetingscheduler.service;
+package meetingscheduler.service;
 
-import systemdesign.meetingscheduler.model.Meeting;
-import systemdesign.meetingscheduler.model.Room;
-import systemdesign.meetingscheduler.model.TimeInterval;
-import systemdesign.meetingscheduler.model.User;
+import meetingscheduler.model.Meeting;
+import meetingscheduler.model.Room;
+import meetingscheduler.model.TimeInterval;
+import meetingscheduler.model.User;
 
 import java.util.List;
 import java.util.Optional;

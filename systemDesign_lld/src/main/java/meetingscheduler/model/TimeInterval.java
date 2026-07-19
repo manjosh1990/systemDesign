@@ -1,4 +1,4 @@
-package systemdesign.meetingscheduler.model;
+package meetingscheduler.model;
 
 import java.time.LocalTime;
 

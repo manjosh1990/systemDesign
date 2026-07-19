@@ -1,11 +1,11 @@
-package systemdesign.meetingscheduler;
+package meetingscheduler;
 
-import systemdesign.meetingscheduler.model.Meeting;
-import systemdesign.meetingscheduler.model.Room;
-import systemdesign.meetingscheduler.model.TimeInterval;
-import systemdesign.meetingscheduler.model.User;
-import systemdesign.meetingscheduler.service.EmailNotificationService;
-import systemdesign.meetingscheduler.service.MeetingScheduler;
+import meetingscheduler.model.Meeting;
+import meetingscheduler.model.Room;
+import meetingscheduler.model.TimeInterval;
+import meetingscheduler.model.User;
+import meetingscheduler.service.EmailNotificationService;
+import meetingscheduler.service.MeetingScheduler;
 
 import java.time.LocalTime;
 import java.util.Arrays;

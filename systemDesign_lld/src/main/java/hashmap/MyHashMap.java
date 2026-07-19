@@ -1,4 +1,4 @@
-package systemdesign.hashmap;
+package hashmap;
 
 class MyHashMap<K,V>{
 
