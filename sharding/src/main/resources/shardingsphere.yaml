@@ -1,0 +1,41 @@
+dataSources:
+  ds0:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://$${SHARD_0_HOST::localhost}:$${SHARD_PORT::5432}/$${SHARD_0_DB::ds_0}
+    username: $${DB_USERNAME::postgres}
+    password: $${DB_PASSWORD::password}
+    connectionTimeoutMilliseconds: 30000
+    idleTimeoutMilliseconds: 60000
+    maxLifetimeMilliseconds: 1800000
+    maxPoolSize: 50
+    minPoolSize: 1
+  ds1:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: org.postgresql.Driver
+    jdbcUrl: jdbc:postgresql://$${SHARD_1_HOST::localhost}:$${SHARD_1_PORT::5433}/$${SHARD_1_DB::ds_1}
+    username: $${DB_USERNAME::postgres}
+    password: $${DB_PASSWORD::password}
+    connectionTimeoutMilliseconds: 30000
+    idleTimeoutMilliseconds: 60000
+    maxLifetimeMilliseconds: 1800000
+    maxPoolSize: 50
+    minPoolSize: 1
+
+rules:
+- !SHARDING
+  tables:
+    t_order:
+      actualDataNodes: ds${0..1}.t_order
+      databaseStrategy:
+        standard:
+          shardingColumn: user_id
+          shardingAlgorithmName: t_order_inline
+  shardingAlgorithms:
+    t_order_inline:
+      type: INLINE
+      props:
+        algorithm-expression: ds${user_id % 2}
+
+props:
+  sql-show: true

@@ -1,0 +1,15 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  # The Control Plane (Master Node)
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 18080
+        protocol: TCP
+
+  # Worker Node 1 (Ideal for pg-shard-0)
+  - role: worker
+
+  # Worker Node 2 (Ideal for pg-shard-1)
+  - role: worker

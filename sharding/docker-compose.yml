@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  pg-shard-0:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ds_0
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-shard-0-data:/var/lib/postgresql/data
+
+  pg-shard-1:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ds_1
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-shard-1-data:/var/lib/postgresql/data
+
+volumes:
+  pg-shard-0-data:
+  pg-shard-1-data:

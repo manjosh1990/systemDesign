@@ -1,0 +1,3 @@
+@echo off
+echo Destroying KIND cluster...
+kind delete cluster
