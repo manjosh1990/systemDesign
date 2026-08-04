@@ -2259,7 +2259,7 @@ spec:
           storage: 1Gi
           
           
-od Scheduling Lab
+pod Scheduling Lab
 Pod Scheduling
 
 $ kubectl get node
