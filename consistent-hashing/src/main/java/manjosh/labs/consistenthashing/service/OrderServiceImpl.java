@@ -1,5 +1,7 @@
 package manjosh.labs.consistenthashing.service;
 
+import java.util.List;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import manjosh.labs.consistenthashing.entity.Order;
@@ -41,6 +43,15 @@ public class OrderServiceImpl implements OrderService {
         }
         
         return order;
+    }
+
+    @Override
+    @ShardTransactional(routingKey = "#userId")
+    public List<Order> getOrdersByUserId(Long userId) {
+        EntityManager em = ShardEntityManagerHolder.get();
+        return em.createQuery("SELECT o FROM Order o WHERE o.userId = :userId", Order.class)
+                .setParameter("userId", userId)
+                .getResultList();
     }
 
     @Override

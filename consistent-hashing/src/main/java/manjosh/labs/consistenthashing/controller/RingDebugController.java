@@ -1,5 +1,8 @@
 package manjosh.labs.consistenthashing.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import manjosh.labs.consistenthashing.core.ConsistentHashRing;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,19 +15,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SortedMap;
 
-/**
- * RingDebugController — exposes ring internals for observability.
- *
- * Use this to verify:
- *   - How many vnodes each physical node has
- *   - Which shard a given key would route to
- *   - Simulated distribution across N keys (detect hotspots)
- *
- * In production, you'd gate this behind an admin role or actuator endpoint.
- * For a learning POC, it's invaluable for understanding the ring behavior.
- */
 @RestController
 @RequestMapping("/debug/ring")
+@Tag(name = "Ring Debugger", description = "Observability APIs for visualizing the internals of the Consistent Hash Ring.")
 public class RingDebugController {
 
     private final ConsistentHashRing ring;
@@ -33,15 +26,14 @@ public class RingDebugController {
         this.ring = ring;
     }
 
-    /**
-     * GET /debug/ring/stats
-     * Returns: how many virtual nodes each physical node owns.
-     */
     @GetMapping("/stats")
+    @Operation(
+            summary = "Get Ring Statistics",
+            description = "Returns the total number of Virtual Nodes and how they are distributed across the physical active Database Shards."
+    )
     public ResponseEntity<Map<String, Object>> stats() {
         SortedMap<Long, String> snapshot = ring.getRingSnapshot();
 
-        // Count vnodes per physical node
         Map<String, Integer> vnodeCounts = new HashMap<>();
         for (String node : snapshot.values()) {
             vnodeCounts.merge(node, 1, Integer::sum);
@@ -55,26 +47,24 @@ public class RingDebugController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * GET /debug/ring/lookup?key=user:42
-     * Returns: which shard owns this key.
-     */
     @GetMapping("/lookup")
-    public ResponseEntity<Map<String, String>> lookup(@RequestParam String key) {
+    @Operation(
+            summary = "Lookup Shard by Key",
+            description = "Performs a mathematical lookup to determine exactly which Database Shard currently owns a specific key. This does NOT hit the database, it purely queries the Hash Ring."
+    )
+    public ResponseEntity<Map<String, String>> lookup(
+            @Parameter(description = "The Shard Key (e.g. userId)") @RequestParam String key) {
         String node = ring.getNode(key);
         return ResponseEntity.ok(Map.of("key", key, "shard", node));
     }
 
-    /**
-     * GET /debug/ring/distribution?keys=1000
-     * Simulates N user IDs and shows how they distribute across shards.
-     * Use this to verify uniform distribution.
-     *
-     * Example output: {"ds0": 512, "ds1": 488} — nearly 50/50 for 2 shards.
-     */
     @GetMapping("/distribution")
+    @Operation(
+            summary = "Simulate Key Distribution",
+            description = "Simulates routing N keys through the Hash Ring to verify that the load is distributed evenly across all shards, proving the effectiveness of our MurmurHash3 algorithm."
+    )
     public ResponseEntity<Map<String, Object>> distribution(
-            @RequestParam(defaultValue = "1000") int keys) {
+            @Parameter(description = "Number of keys to simulate") @RequestParam(defaultValue = "1000") int keys) {
 
         Map<String, Integer> distribution = new HashMap<>();
 
@@ -87,7 +77,6 @@ public class RingDebugController {
         response.put("totalKeys", keys);
         response.put("distribution", distribution);
 
-        // Calculate skew percentage
         if (!distribution.isEmpty()) {
             int max = distribution.values().stream().mapToInt(Integer::intValue).max().orElse(0);
             int min = distribution.values().stream().mapToInt(Integer::intValue).min().orElse(0);

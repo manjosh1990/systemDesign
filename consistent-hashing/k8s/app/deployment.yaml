@@ -19,14 +19,16 @@ spec:
         image: consistent-hashing:latest
         imagePullPolicy: Never
         ports:
-        - containerPort: 8080
+        - containerPort: 8081
         env:
-        # Override the database URLs to point to the Kubernetes Services
-        # instead of 'localhost'
-        - name: app.shards[0].url
+        # The Master Metadata DB (ds0) is the only one the app knows about on boot.
+        # It uses the K8s service name `postgres-ds0` to connect.
+        - name: app.master.url
           value: "jdbc:postgresql://postgres-ds0:5432/ds_0"
-        - name: app.shards[1].url
-          value: "jdbc:postgresql://postgres-ds1:5433/ds_1"
+        - name: app.master.username
+          value: "postgres"
+        - name: app.master.password
+          value: "password"
 ---
 apiVersion: v1
 kind: Service
@@ -37,6 +39,6 @@ spec:
   selector:
     app: consistent-hashing-app
   ports:
-  - port: 8080
-    targetPort: 8080
-    nodePort: 30080
+  - port: 8081
+    targetPort: 8081
+    nodePort: 30081

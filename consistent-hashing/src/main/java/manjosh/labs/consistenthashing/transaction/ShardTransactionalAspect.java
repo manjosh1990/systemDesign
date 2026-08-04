@@ -18,7 +18,9 @@ import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Method;
 import java.util.Map;
+import manjosh.labs.consistenthashing.config.ShardRegistry;
 
 /**
  * ShardTransactionalAspect — manages JPA transactions across multiple shards dynamically.
@@ -50,24 +52,27 @@ public class ShardTransactionalAspect {
     private static final Logger log = LoggerFactory.getLogger(ShardTransactionalAspect.class);
 
     private final ConsistentHashRing ring;
-    private final Map<String, EntityManagerFactory> emfMap;
+    private final ShardRegistry shardRegistry;
 
     // SpEL tools for evaluating the routingKey dynamically
     private final ExpressionParser parser = new SpelExpressionParser();
     private final ParameterNameDiscoverer parameterNameDiscoverer = new DefaultParameterNameDiscoverer();
 
-    public ShardTransactionalAspect(ConsistentHashRing ring, Map<String, EntityManagerFactory> emfMap) {
+    public ShardTransactionalAspect(ConsistentHashRing ring, ShardRegistry shardRegistry) {
         this.ring = ring;
-        this.emfMap = emfMap;
+        this.shardRegistry = shardRegistry;
     }
 
-    @Around("@annotation(shardTransactional)")
-    public Object manageTransaction(ProceedingJoinPoint pjp, ShardTransactional shardTransactional) throws Throwable {
+    @Around("@annotation(manjosh.labs.consistenthashing.transaction.ShardTransactional)")
+    public Object manageShardTransaction(ProceedingJoinPoint pjp) throws Throwable {
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        Method method = signature.getMethod();
+        ShardTransactional annotation = method.getAnnotation(ShardTransactional.class);
 
-        // 1. Evaluate the SpEL routing key (e.g., "#order.userId" -> "42")
-        String routingKeyStr = evaluateSpel(pjp, shardTransactional.routingKey());
+        String spelExpression = annotation.routingKey();
+        String routingKeyStr = evaluateSpel(pjp, spelExpression);
 
-        // 2. Ask the ring which shard owns this key
+        // 2. Query the ring for the shard name
         String shardName = ring.getNode(routingKeyStr);
         log.debug("Routing key '{}' maps to shard: {}", routingKeyStr, shardName);
 
@@ -84,7 +89,7 @@ public class ShardTransactionalAspect {
         }
 
         // 4. Get the correct EntityManagerFactory for that shard
-        EntityManagerFactory emf = emfMap.get(shardName);
+        EntityManagerFactory emf = shardRegistry.getEntityManagerFactory(shardName);
         if (emf == null) {
             throw new IllegalStateException("No EntityManagerFactory configured for shard: " + shardName);
         }
