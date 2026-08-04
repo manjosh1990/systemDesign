@@ -10,25 +10,29 @@ import jakarta.persistence.EntityManager;
  *   ThreadLocal gives each thread its own private storage slot.
  *   So two concurrent requests don't share or overwrite each other's EntityManager.
  *
- * Lifecycle (managed entirely by ShardTransactionalAspect):
- *   1. Aspect creates EntityManager for the correct shard
- *   2. Aspect calls set(em)         ← stores it for this thread
- *   3. Service method calls get()   ← reads it from this thread's slot
- *   4. Aspect calls clear()         ← removes it after commit/rollback
+ * Nesting protection:
+ *   If method A (@ShardTransactional) calls method B (@ShardTransactional),
+ *   the depth counter ensures:
+ *     - Method B reuses the SAME EntityManager (doesn't create a new one)
+ *     - clear() only removes the EM when depth reaches zero (outermost call)
  *
- * The service method never creates an EntityManager itself.
- * It just reads from this holder — which keeps service code clean.
+ * Lifecycle (managed entirely by ShardTransactionalAspect):
+ *   1. Aspect calls set(em)         ← stores it, increments depth
+ *   2. Service method calls get()   ← reads it from this thread's slot
+ *   3. Aspect calls clear()         ← decrements depth, removes only at 0
  */
 public class ShardEntityManagerHolder {
 
     private static final ThreadLocal<EntityManager> holder = new ThreadLocal<>();
+    private static final ThreadLocal<Integer> depth = ThreadLocal.withInitial(() -> 0);
 
     /**
-     * Stores the EntityManager for the current thread.
+     * Stores the EntityManager for the current thread and increments nesting depth.
      * Called by ShardTransactionalAspect before the method executes.
      */
     public static void set(EntityManager em) {
         holder.set(em);
+        depth.set(depth.get() + 1);
     }
 
     /**
@@ -47,13 +51,26 @@ public class ShardEntityManagerHolder {
     }
 
     /**
-     * Removes the EntityManager for the current thread.
-     * Called by ShardTransactionalAspect after commit/rollback to prevent memory leaks.
+     * Returns true if an EntityManager is already bound to this thread.
+     * Used by the aspect to detect nested @ShardTransactional calls.
+     */
+    public static boolean isActive() {
+        return holder.get() != null;
+    }
+
+    /**
+     * Decrements nesting depth. Removes the EntityManager only when the outermost
+     * @ShardTransactional method completes (depth reaches 0).
      *
-     * ThreadLocal values are not garbage collected automatically when the thread
-     * returns to a thread pool — always clear after use.
+     * This prevents a nested call from clearing the EM that the outer call still needs.
      */
     public static void clear() {
-        holder.remove();
+        int current = depth.get() - 1;
+        if (current <= 0) {
+            holder.remove();
+            depth.remove();
+        } else {
+            depth.set(current);
+        }
     }
 }

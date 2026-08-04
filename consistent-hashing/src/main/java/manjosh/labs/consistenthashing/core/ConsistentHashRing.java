@@ -2,17 +2,17 @@ package manjosh.labs.consistenthashing.core;
 
 import org.springframework.stereotype.Component;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * ConsistentHashRing — the core data structure.
  *
  * Concept:
- *   - Imagine a circle (ring) numbered 0 → 2^32.
+ *   - Imagine a circle (ring) numbered 0 → 2^64.
  *   - Both nodes and keys are "placed" on this ring via a hash function.
  *   - To find which node owns a key: walk CLOCKWISE from the key's position
  *     until you hit a node. That node owns the key.
@@ -21,6 +21,11 @@ import java.util.TreeMap;
  *   - A single node placed at one point on the ring causes uneven load.
  *   - Instead, each physical node gets VIRTUAL_NODES positions on the ring.
  *   - This spreads the load evenly across all physical nodes.
+ *
+ * Concurrency model:
+ *   - ReadWriteLock allows multiple concurrent readers (getNode — hot path)
+ *   - Writers (addNode/removeNode — cold path) get exclusive access
+ *   - Readers never block each other; only a writer blocks readers
  *
  * Internal structure:
  *   TreeMap<Long, String>
@@ -38,19 +43,29 @@ public class ConsistentHashRing {
     // TreeMap keeps entries in ascending key order — perfect for clockwise lookup.
     private final TreeMap<Long, String> ring = new TreeMap<>();
 
+    // ReadWriteLock: multiple readers concurrently, exclusive writer
+    // This is the key difference from synchronized — getNode() no longer serializes requests.
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
     // -------------------------------------------------------------------------
-    // Node Management
+    // Node Management (write path — rare, exclusive)
     // -------------------------------------------------------------------------
 
     /**
      * Add a physical node to the ring.
      * Creates VIRTUAL_NODES entries like: hash("shard-0#0"), hash("shard-0#1"), ...
+     *
+     * Acquires write lock — blocks until all readers finish, then blocks all new readers.
+     * This guarantees readers always see a complete set of vnodes (all 150 or none).
      */
-    public synchronized void addNode(String nodeName) {
-        for (int i = 0; i < VIRTUAL_NODES; i++) {
-            // Each virtual node gets a unique key: "nodeName#i"
-            long position = hash(nodeName + "#" + i);
-            ring.put(position, nodeName);
+    public void addNode(String nodeName) {
+        lock.writeLock().lock();
+        try {
+            for (int i = 0; i < VIRTUAL_NODES; i++) {
+                ring.put(hash(nodeName + "#" + i), nodeName);
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -58,15 +73,19 @@ public class ConsistentHashRing {
      * Remove a physical node from the ring.
      * Removes all its virtual node entries.
      */
-    public synchronized void removeNode(String nodeName) {
-        for (int i = 0; i < VIRTUAL_NODES; i++) {
-            long position = hash(nodeName + "#" + i);
-            ring.remove(position);
+    public void removeNode(String nodeName) {
+        lock.writeLock().lock();
+        try {
+            for (int i = 0; i < VIRTUAL_NODES; i++) {
+                ring.remove(hash(nodeName + "#" + i));
+            }
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
     // -------------------------------------------------------------------------
-    // Key Lookup — the clockwise walk
+    // Key Lookup — the clockwise walk (read path — hot, concurrent)
     // -------------------------------------------------------------------------
 
     /**
@@ -78,61 +97,99 @@ public class ConsistentHashRing {
      *   3. If tailMap is empty, we've gone past the end of the ring → wrap around
      *      and take ring.firstKey() (the node at the "start" of the ring).
      *   4. Return the node at the first entry found.
+     *
+     * Acquires read lock — multiple threads can execute this simultaneously.
+     * Only blocked when a writer (addNode/removeNode) is in progress.
      */
-    public synchronized String getNode(String key) {
-        if (ring.isEmpty()) {
-            throw new IllegalStateException("Hash ring is empty — add nodes first.");
+    public String getNode(String key) {
+        lock.readLock().lock();
+        try {
+            if (ring.isEmpty()) {
+                throw new IllegalStateException("Hash ring is empty — add nodes first.");
+            }
+
+            long position = hash(key);
+
+            // tailMap returns all entries with key >= position (clockwise portion)
+            SortedMap<Long, String> tail = ring.tailMap(position);
+
+            // Wrap around if we're past the last node on the ring
+            long nodePosition = tail.isEmpty() ? ring.firstKey() : tail.firstKey();
+
+            return ring.get(nodePosition);
+        } finally {
+            lock.readLock().unlock();
         }
-
-        long position = hash(key);
-
-        // tailMap returns all entries with key >= position (clockwise portion)
-        SortedMap<Long, String> tail = ring.tailMap(position);
-
-        // Wrap around if we're past the last node on the ring
-        long nodePosition = tail.isEmpty() ? ring.firstKey() : tail.firstKey();
-
-        return ring.get(nodePosition);
     }
 
     /**
-     * Returns an unmodifiable snapshot of the ring for inspection/debugging.
+     * Returns a defensive copy of the ring for inspection/debugging.
      */
     public SortedMap<Long, String> getRingSnapshot() {
-        return Collections.unmodifiableSortedMap(ring);
+        lock.readLock().lock();
+        try {
+            return Collections.unmodifiableSortedMap(new TreeMap<>(ring));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public int getNodeCount() {
-        // Distinct physical nodes = distinct values in the ring
-        return (int) ring.values().stream().distinct().count();
+        lock.readLock().lock();
+        try {
+            return (int) ring.values().stream().distinct().count();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     // -------------------------------------------------------------------------
-    // Hash Function — MD5 → first 8 bytes → Long
+    // Hash Function — MurmurHash3-inspired (fast, good distribution)
     // -------------------------------------------------------------------------
 
     /**
-     * Hash a string to a Long position on the ring using MD5.
+     * Hash a string to a Long position on the ring.
      *
-     * Why MD5 here?
-     *   - We don't need cryptographic security — just uniform distribution.
-     *   - MD5 gives 128 bits; we take the first 8 bytes (64 bits) for a Long.
-     *   - This gives 2^64 positions — far more than enough for a demo ring.
+     * Why not String.hashCode()?
+     *   - String.hashCode() is 32-bit with weak avalanche for short strings.
+     *   - "1", "2", "3" produce sequential hash codes — poor ring spread.
+     *
+     * Why not MD5?
+     *   - MD5 allocates MessageDigest + byte[] per call (~200ns).
+     *   - We don't need cryptographic properties — just uniform distribution.
+     *
+     * Approach: FNV-1a over the string bytes, then MurmurHash3 finalization mix.
+     *   - FNV-1a: simple, fast, processes all bytes (not just first few like hashCode).
+     *   - Murmur mix: ensures excellent avalanche (1-bit input change → ~50% output bits flip).
      */
     private long hash(String key) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(key.getBytes());
+        long h = fnv1a64(key);
+        return murmur3Mix64(h);
+    }
 
-            // Combine first 8 bytes into a long (big-endian)
-            long hash = 0;
-            for (int i = 0; i < 8; i++) {
-                hash = (hash << 8) | (digest[i] & 0xFF);
-            }
-            return hash;
-        } catch (NoSuchAlgorithmException e) {
-            // MD5 is guaranteed by the Java spec — this will never happen
-            throw new RuntimeException("MD5 not available", e);
+    /**
+     * FNV-1a 64-bit hash — processes every byte of the input.
+     * Simple loop, no allocations, good base distribution.
+     */
+    private static long fnv1a64(String key) {
+        long hash = 0xcbf29ce484222325L; // FNV offset basis
+        for (int i = 0; i < key.length(); i++) {
+            hash ^= key.charAt(i);
+            hash *= 0x100000001b3L;       // FNV prime
         }
+        return hash;
+    }
+
+    /**
+     * MurmurHash3 64-bit finalizer (fmix64).
+     * Takes any long and spreads its bits uniformly across the output space.
+     */
+    private static long murmur3Mix64(long k) {
+        k ^= k >>> 33;
+        k *= 0xff51afd7ed558ccdL;
+        k ^= k >>> 33;
+        k *= 0xc4ceb9fe1a85ec53L;
+        k ^= k >>> 33;
+        return k;
     }
 }

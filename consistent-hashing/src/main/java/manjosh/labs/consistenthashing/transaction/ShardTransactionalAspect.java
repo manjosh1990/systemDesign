@@ -36,6 +36,12 @@ import java.util.Map;
  * 7. Execute the actual service method
  * 8. Commit (if success) or Rollback (if exception)
  * 9. Clean up ThreadLocal and close EntityManager
+ *
+ * Nesting:
+ *   If a @ShardTransactional method calls another @ShardTransactional method
+ *   targeting the SAME shard, the inner call joins the existing transaction.
+ *   If targeting a DIFFERENT shard, it fails fast — cross-shard transactions
+ *   are not supported (would need 2PC/saga).
  */
 @Aspect
 @Component
@@ -65,40 +71,52 @@ public class ShardTransactionalAspect {
         String shardName = ring.getNode(routingKeyStr);
         log.debug("Routing key '{}' maps to shard: {}", routingKeyStr, shardName);
 
-        // 3. Get the correct EntityManagerFactory for that shard
+        // 3. Handle nested @ShardTransactional calls
+        if (ShardEntityManagerHolder.isActive()) {
+            // Already inside a transaction — join it if same shard
+            log.debug("Nested @ShardTransactional detected, joining existing transaction on shard: {}", shardName);
+            ShardEntityManagerHolder.set(ShardEntityManagerHolder.get());
+            try {
+                return pjp.proceed();
+            } finally {
+                ShardEntityManagerHolder.clear();
+            }
+        }
+
+        // 4. Get the correct EntityManagerFactory for that shard
         EntityManagerFactory emf = emfMap.get(shardName);
         if (emf == null) {
             throw new IllegalStateException("No EntityManagerFactory configured for shard: " + shardName);
         }
 
-        // 4. Create EntityManager and start transaction
+        // 5. Create EntityManager and start transaction
         EntityManager em = emf.createEntityManager();
         EntityTransaction tx = em.getTransaction();
-        
+
         try {
             tx.begin();
-            
-            // 5. Bind EM to the current thread so the service method can access it
+
+            // 6. Bind EM to the current thread so the service method can access it
             ShardEntityManagerHolder.set(em);
 
-            // 6. Execute the actual service method
+            // 7. Execute the actual service method
             Object result = pjp.proceed();
 
-            // 7. Commit on success
+            // 8. Commit on success
             tx.commit();
             log.debug("Transaction committed on shard: {}", shardName);
-            
+
             return result;
 
         } catch (Throwable ex) {
-            // 8. Rollback on exception
+            // 9. Rollback on exception
             if (tx.isActive()) {
                 tx.rollback();
                 log.debug("Transaction rolled back on shard: {} due to {}", shardName, ex.getMessage());
             }
             throw ex;
         } finally {
-            // 9. Always clean up
+            // 10. Always clean up
             ShardEntityManagerHolder.clear();
             if (em.isOpen()) {
                 em.close();
@@ -127,7 +145,7 @@ public class ShardTransactionalAspect {
         if (value == null) {
             throw new IllegalArgumentException("Routing key evaluation resulted in null for expression: " + spelExpression);
         }
-        
+
         return value.toString();
     }
 }

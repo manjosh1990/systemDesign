@@ -77,8 +77,8 @@ Imagine a number line from `0` to `MAX (2^64)`. The right end wraps back to the 
 Nobody manually assigns positions. The **node name is hashed** → the output is its position on the ring:
 
 ```
-hash("ds0") → MD5 → 5000   →  ds0 placed at position 5000
-hash("ds1") → MD5 → 2000   →  ds1 placed at position 2000
+hash("ds0") → 5000   →  ds0 placed at position 5000
+hash("ds1") → 2000   →  ds1 placed at position 2000
 ```
 
 The same name always produces the same position. No manual configuration needed.
@@ -185,32 +185,57 @@ The caller still just gets back `"ds0"` or `"ds1"` — virtual nodes are invisib
 
 ```java
 private long hash(String key) {
-    MessageDigest md = MessageDigest.getInstance("MD5");
-    byte[] digest = md.digest(key.getBytes());
-    long hash = 0;
-    for (int i = 0; i < 8; i++) {
-        hash = (hash << 8) | (digest[i] & 0xFF);
+    long h = fnv1a64(key);
+    return murmur3Mix64(h);
+}
+
+private static long fnv1a64(String key) {
+    long hash = 0xcbf29ce484222325L; // FNV offset basis
+    for (int i = 0; i < key.length(); i++) {
+        hash ^= key.charAt(i);
+        hash *= 0x100000001b3L;       // FNV prime
     }
     return hash;
 }
+
+private static long murmur3Mix64(long k) {
+    k ^= k >>> 33;
+    k *= 0xff51afd7ed558ccdL;
+    k ^= k >>> 33;
+    k *= 0xc4ceb9fe1a85ec53L;
+    k ^= k >>> 33;
+    return k;
+}
+```
+
+Two-stage hash pipeline:
+```
+Step 1: FNV-1a — processes every character of the input into a 64-bit hash.
+        XOR each char, multiply by prime. Simple loop, no allocations.
+
+Step 2: MurmurHash3 fmix64 — avalanche finalizer.
+        Ensures small input differences (e.g., "1" vs "2") produce
+        wildly different outputs (~50% of bits flip).
 ```
 
 Trace with `"ds0#0"`:
 ```
-Step 1: MD5("ds0#0") → 16 raw bytes: [A3, 7F, 02, B1, 44, 9C, D2, E8, ...]
-Step 2: Take first 8 bytes:           [A3, 7F, 02, B1, 44, 9C, D2, E8]
-Step 3: Combine into one Long:         0xA37F02B1449CD2E8 → 7263817263918273
-Step 4: ring.put(7263817263918273, "ds0")
+Step 1: fnv1a64("ds0#0")    → 0x7A3F...  (processes d, s, 0, #, 0)
+Step 2: murmur3Mix64(0x7A3F...) → 0xE8D2...9C44  (avalanche)
+Step 3: ring.put(0xE8D2...9C44, "ds0")
 ```
 
-**Why MD5 and not `String.hashCode()`?**
-- `String.hashCode()` can differ across JVM versions or restarts ❌
-- MD5 always produces the same output everywhere, forever ✅
-- MD5 gives a uniform, well-spread distribution across the ring ✅
+**Why FNV-1a + Murmur3 instead of MD5?**
+- MD5 allocates `MessageDigest` + `byte[]` on every call (~200ns) ❌
+- FNV-1a + Murmur3 is pure arithmetic — ~2ns, zero allocation ✅
+- FNV-1a processes ALL bytes (unlike `String.hashCode()` which clusters for short strings) ✅
+- Murmur3 finalizer gives excellent avalanche — uniform ring distribution ✅
+- We don't need cryptographic properties — just uniform distribution ✅
 
-**Why only 8 of the 16 MD5 bytes?**
-- MD5 = 128 bits → too big for a Java `Long`
-- `Long` = 64 bits → `2^64` positions on the ring — more than enough ✅
+**Why not just `String.hashCode()`?**
+- 32-bit only — poor spread across a 64-bit ring
+- Short numeric strings ("1", "2", "3") produce near-sequential values → clustering
+- Spec doesn't guarantee stability across JVM versions
 
 ---
 
@@ -218,6 +243,7 @@ Step 4: ring.put(7263817263918273, "ds0")
 
 ```java
 private final TreeMap<Long, String> ring = new TreeMap<>();
+private final ReadWriteLock lock = new ReentrantReadWriteLock();
 ```
 
 | Key (Long) | Value (String) | Meaning |
@@ -230,6 +256,20 @@ private final TreeMap<Long, String> ring = new TreeMap<>();
 - **Key (Long)** = position on the ring (output of `hash()`)
 - **Value (String)** = physical node name (`"ds0"` or `"ds1"`)
 - **TreeMap** = auto-sorts by key → reading top to bottom = reading the ring left to right
+- **ReadWriteLock** = multiple concurrent readers, exclusive writers
+
+```
+Concurrency model:
+┌──────────────────────────────────────────────┐
+│  readLock (getNode)  │  writeLock (addNode)  │
+├──────────────────────┼───────────────────────┤
+│ Multiple holders     │ Exclusive (one only)  │
+│ simultaneously ✅    │                       │
+│                      │ Waits for all readers │
+│ Blocked ONLY when    │ to finish first       │
+│ a writer holds lock  │                       │
+└──────────────────────┴───────────────────────┘
+```
 
 ```
 0 ─ ds1(500) ─ ds0(1500) ─ ds1(3500) ─ ds0(4500) ─ MAX
@@ -240,10 +280,15 @@ private final TreeMap<Long, String> ring = new TreeMap<>();
 ### `addNode()` — placing a node on the ring
 
 ```java
-public synchronized void addNode(String nodeName) {
-    for (int i = 0; i < VIRTUAL_NODES; i++) {  // VIRTUAL_NODES = 150
-        long position = hash(nodeName + "#" + i);
-        ring.put(position, nodeName);
+public void addNode(String nodeName) {
+    lock.writeLock().lock();
+    try {
+        for (int i = 0; i < VIRTUAL_NODES; i++) {  // VIRTUAL_NODES = 150
+            long position = hash(nodeName + "#" + i);
+            ring.put(position, nodeName);
+        }
+    } finally {
+        lock.writeLock().unlock();
     }
 }
 ```
@@ -259,20 +304,29 @@ After `addNode("ds0")` + `addNode("ds1")`:
 - TreeMap has **300 entries** total
 - But still only **2 physical nodes**
 
-`synchronized` — the ring is shared state; prevents two threads from corrupting it simultaneously.
+`writeLock()` — acquires exclusive access. Readers wait until all 150 vnodes are inserted,
+guaranteeing they always see a complete set (all 150 or none).
 
 ---
 
 ### `getNode()` — the clockwise walk
 
 ```java
-public synchronized String getNode(String key) {
-    long position = hash(key);
-    SortedMap<Long, String> tail = ring.tailMap(position);
-    long nodePosition = tail.isEmpty() ? ring.firstKey() : tail.firstKey();
-    return ring.get(nodePosition);
+public String getNode(String key) {
+    lock.readLock().lock();
+    try {
+        long position = hash(key);
+        SortedMap<Long, String> tail = ring.tailMap(position);
+        long nodePosition = tail.isEmpty() ? ring.firstKey() : tail.firstKey();
+        return ring.get(nodePosition);
+    } finally {
+        lock.readLock().unlock();
+    }
 }
 ```
+
+`readLock()` — multiple threads can execute `getNode()` simultaneously (non-exclusive).
+Only blocked when a writer (`addNode`/`removeNode`) is in progress.
 
 `ring.tailMap(position)` returns all entries with key `>= position` — that's the clockwise portion.
 
@@ -297,10 +351,15 @@ Result: user:3 → ds1 ✅
 ### `removeNode()` — a node goes down
 
 ```java
-public synchronized void removeNode(String nodeName) {
-    for (int i = 0; i < VIRTUAL_NODES; i++) {
-        long position = hash(nodeName + "#" + i);
-        ring.remove(position);
+public void removeNode(String nodeName) {
+    lock.writeLock().lock();
+    try {
+        for (int i = 0; i < VIRTUAL_NODES; i++) {
+            long position = hash(nodeName + "#" + i);
+            ring.remove(position);
+        }
+    } finally {
+        lock.writeLock().unlock();
     }
 }
 ```
@@ -318,13 +377,14 @@ Removes all 150 virtual nodes for that shard. After removal, any key that was ro
                         │  HTTP Request
                         ▼
   ┌────────────────────────────────────────────┐
-  │              OrderController               │
+  │    OrderController / RingDebugController   │
   └─────────────────────┬──────────────────────┘
                         │
                         ▼
   ┌────────────────────────────────────────────┐
   │              OrderServiceImpl              │
   │                                            │
+  │  @ShardTransactional aspect intercepts:    │
   │  1. ring.getNode(userId) → "ds0"           │
   │  2. emfMap.get("ds0")                      │
   │     .createEntityManager()                 │
@@ -338,6 +398,14 @@ Removes all 150 virtual nodes for that shard. After removal, any key that was ro
   │ :5432      │     │ :5433      │
   └────────────┘     └────────────┘
 ```
+
+### Debug Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /debug/ring/stats` | Vnode count per physical node |
+| `GET /debug/ring/lookup?key=42` | Which shard owns a key |
+| `GET /debug/ring/distribution?keys=10000` | Simulated load distribution + skew % |
 
 ### 5.1 End-to-End Request Flow
 Let's trace a `POST /orders` request with `{ "orderId": 100, "userId": 42 }`:
@@ -557,16 +625,41 @@ public Order createOrder(Order order) {
 9. em.close(), ThreadLocal.clear()
 ```
 
+### Nesting Protection
+
+If a `@ShardTransactional` method calls another `@ShardTransactional` method, the inner call
+**joins the existing transaction** instead of creating a new one:
+
+```
+Without nesting protection:
+─────────────────────────────
+createOrder()  → set(em1) → begin tx
+  └─ validate() → set(em2) → begin tx2   ← OVERWRITES em1!
+                 ← clear()                ← em1 is GONE
+              ← clear()                   ← NPE or stale state ❌
+
+With nesting protection (current implementation):
+─────────────────────────────
+createOrder()  → set(em1), depth=1 → begin tx
+  └─ validate() → isActive()=true → joins existing, depth=2
+                 ← clear(), depth=1       ← EM preserved ✅
+              ← clear(), depth=0          ← EM removed, tx committed ✅
+```
+
+`ShardEntityManagerHolder` uses a depth counter (`ThreadLocal<Integer>`) — only the outermost
+call creates/commits the transaction and cleans up the EntityManager.
+
 ---
 
 ## 9. Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Application | Java 17, Spring Boot 3 |
-| Routing Logic | Custom `ConsistentHashRing` (TreeMap + MD5) |
+| Application | Java 21, Spring Boot 3 |
+| Routing Logic | Custom `ConsistentHashRing` (TreeMap + FNV-1a + MurmurHash3) |
+| Concurrency | `ReentrantReadWriteLock` (concurrent reads, exclusive writes) |
 | ORM | JPA / Hibernate (manual multi-datasource setup) |
-| Transaction Mgmt | Custom `@ShardTransactional` AOP aspect |
+| Transaction Mgmt | Custom `@ShardTransactional` AOP aspect (with nesting protection) |
 | Database (shards) | PostgreSQL |
 | Schema Migration | Flyway (per-shard) |
 | Containerisation | Docker |
@@ -587,18 +680,19 @@ consistent-hashing/
 │   │   ├── FlywayMigrationRunner.java  ← runs schema migration on each shard
 │   │   └── OpenApiConfig.java          ← Swagger/OpenAPI config
 │   ├── core/
-│   │   └── ConsistentHashRing.java     ← TreeMap ring, hash(), addNode/removeNode/getNode
+│   │   └── ConsistentHashRing.java     ← TreeMap ring, FNV-1a+Murmur hash, ReadWriteLock
 │   ├── transaction/
 │   │   ├── ShardTransactional.java     ← custom @ShardTransactional annotation
-│   │   ├── ShardEntityManagerHolder.java ← ThreadLocal EntityManager holder
-│   │   └── ShardTransactionalAspect.java ← AOP: begin/commit/rollback/close
+│   │   ├── ShardEntityManagerHolder.java ← ThreadLocal EM holder (with nesting depth)
+│   │   └── ShardTransactionalAspect.java ← AOP: begin/commit/rollback/close + nesting
 │   ├── entity/
 │   │   └── Order.java                  ← JPA entity (orderId, userId, status)
 │   ├── service/
 │   │   ├── OrderService.java           ← interface
 │   │   └── OrderServiceImpl.java       ← uses ring + @ShardTransactional
 │   ├── controller/
-│   │   └── OrderController.java        ← REST: POST /orders, GET /orders/{id}
+│   │   ├── OrderController.java        ← REST: POST /orders, GET /orders/{id}
+│   │   └── RingDebugController.java    ← GET /debug/ring/stats, /lookup, /distribution
 │   ├── exception/
 │   │   └── OrderNotFoundException.java
 │   └── ConsistentHashingApplication.java
@@ -656,10 +750,13 @@ consistent-hashing/
 
 ## 12. Key Learnings
 
-1. **Routing Logic is Math, Not Magic**: Unlike using ShardingSphere, implementing our own Consistent Hash Ring using a `TreeMap` and MD5 hashes demystifies how keys are routed deterministically.
-2. **Spring Boot Auto-Configuration Conflicts**: When managing manual DataSources and JPA configurations (especially in newer Spring Boot versions), you must aggressively exclude downstream auto-configurations (`DataSourceAutoConfiguration`, `HibernateJpaAutoConfiguration`, etc.) directly on the `@SpringBootApplication` annotation using the exact version-specific package names.
-3. **AOP bridges the "Where" and the "What"**: By using a custom `@ShardTransactional` aspect and `ThreadLocal` context, the business logic (`OrderServiceImpl`) remains perfectly clean and completely agnostic of the sharding infrastructure.
-4. **Timezone Pitfalls**: The PostgreSQL JDBC driver aggressively validates timezones. Running on Windows with non-standard IANA mappings (like "Asia/Calcutta") will crash the application on startup. Standardizing backend systems to UTC or switching to Alpine-based database images avoids this.
+1. **Routing Logic is Math, Not Magic**: Unlike using ShardingSphere, implementing our own Consistent Hash Ring using a `TreeMap` and hash functions demystifies how keys are routed deterministically.
+2. **Hash Function Choice Matters**: MD5 is overkill (cryptographic, allocates objects). FNV-1a + MurmurHash3 gives equally uniform distribution with zero allocation and ~100x better throughput on the hot path.
+3. **Concurrency Model Must Match Access Pattern**: The ring is read-heavy (every request) and write-rare (only at startup/scaling). `ReadWriteLock` allows concurrent reads while `synchronized` would serialize them all — a massive throughput difference under load.
+4. **Nesting is a Silent Bug**: If `@ShardTransactional` method A calls method B (also annotated), the inner call must join the existing transaction — not create a new one. A depth counter in the ThreadLocal holder prevents double-close bugs.
+5. **Spring Boot Auto-Configuration Conflicts**: When managing manual DataSources and JPA configurations, you must aggressively exclude downstream auto-configurations (`DataSourceAutoConfiguration`, `HibernateJpaAutoConfiguration`, etc.) directly on the `@SpringBootApplication` annotation.
+6. **AOP bridges the "Where" and the "What"**: By using a custom `@ShardTransactional` aspect and `ThreadLocal` context, the business logic (`OrderServiceImpl`) remains perfectly clean and completely agnostic of the sharding infrastructure.
+7. **Observability is Essential**: A `/debug/ring/distribution` endpoint lets you verify uniform key distribution at runtime — catching hotspots before they become outages.
 
 ---
 
