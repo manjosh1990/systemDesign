@@ -4,13 +4,62 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.example</groupId>
+    <!-- Spring Boot BOM — all child modules inherit dependency management & plugin config -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>manjosh.labs</groupId>
     <artifactId>system-design</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
+
+    <properties>
+        <java.version>21</java.version>
+        <springdoc.version>2.5.0</springdoc.version>
+    </properties>
+
+    <!--
+        dependencyManagement: only for deps NOT covered by spring-boot-starter-parent BOM.
+        Spring Boot deps (webmvc, data-jpa, actuator, test) are already version-managed by the parent BOM.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <!-- springdoc is NOT in the Spring Boot BOM — pin version here once for all modules -->
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!--
+        Direct dependencies: inherited by ALL child modules.
+        Only truly universal deps go here.
+    -->
+    <dependencies>
+        <!-- Actuator: every Spring Boot POC needs K8s health probes -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Test: every module needs a test framework -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <modules>
         <module>devops_tutorials</module>
         <module>systemDesign_lld</module>
         <module>sharding</module>
+        <module>consistent-hashing</module>
     </modules>
+
 </project>
